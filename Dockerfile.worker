@@ -18,7 +18,7 @@ FROM base AS builder
 WORKDIR /app
 ENV VITE_IS_HOSTED=1 \
     VITE_TELEMETRY_DISABLED=1 \
-    NODE_OPTIONS=--max-old-space-size=8192
+    NODE_OPTIONS=--max-old-space-size=4096
 # Install deps deterministically (workspace manifests first for a reproducible
 # root lockfile install), blocking lifecycle scripts, then rebuild esbuild which
 # tsdown needs.
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 # CLI only — tsdown emits dist/src/entrypoint.js (the bin). Skip build:app (web
 # UI) and tsc (type-check, --noEmit) since the Job never serves the UI.
-RUN NODE_OPTIONS=--max-old-space-size=8192 npx tsdown
+RUN NODE_OPTIONS=--max-old-space-size=4096 npx tsdown
 
 FROM base AS worker
 WORKDIR /app
