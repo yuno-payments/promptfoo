@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1
+#
+# CLI-only image for Yuno PaaS. Unlike the default Dockerfile (which builds the
+# web app + runs the server), this builds just the `promptfoo` CLI (tsdown →
+# dist/src/entrypoint.js) and adds awscli so a pentest-worker K8s Job can run
+# `promptfoo redteam run` against a target and sync the JSON report to S3.
+#
+# Red-team generation + grading run fully LOCAL against the AI provider the
+# worker injects (Claude-OAuth / Anthropic-key / OpenAI / Gemini) — the worker
+# sets PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=1 so nothing is sent to
+# promptfoo's cloud (respects the egress lockdown).
+FROM node:24.21.0-alpine AS base
+RUN apk upgrade --no-cache && \
+    apk add --no-cache python3 py3-pip curl bash aws-cli libc6-compat && \
+    ln -sf python3 /usr/bin/python
+
+FROM base AS builder
+WORKDIR /app
+ENV VITE_IS_HOSTED=1 \
+    VITE_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=8192
+# Install deps deterministically (workspace manifests first for a reproducible
+# root lockfile install), blocking lifecycle scripts, then rebuild esbuild which
+# tsdown needs.
+COPY package.json package-lock.json ./
+COPY src/app/package.json ./src/app/package.json
+COPY site/package.json ./site/package.json
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --install-links --include=peer --ignore-scripts && \
+    npm rebuild ./node_modules/esbuild
+COPY . .
+# CLI only — tsdown emits dist/src/entrypoint.js (the bin). Skip build:app (web
+# UI) and tsc (type-check, --noEmit) since the Job never serves the UI.
+RUN NODE_OPTIONS=--max-old-space-size=8192 npx tsdown
+
+FROM base AS worker
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/dist ./dist
+RUN ln -sf /app/dist/src/entrypoint.js /usr/local/bin/promptfoo && \
+    ln -sf /app/dist/src/entrypoint.js /usr/local/bin/pf && \
+    chmod +x /app/dist/src/entrypoint.js
+# Keep everything local + quiet: no telemetry, no update checks, no remote
+# red-team generation. The worker can still override per-Job via env.
+ENV PROMPTFOO_RUNNING_IN_DOCKER=1 \
+    PROMPTFOO_DISABLE_TELEMETRY=1 \
+    PROMPTFOO_DISABLE_UPDATE=1 \
+    PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=1 \
+    PROMPTFOO_SELF_HOSTED=1
+ENTRYPOINT []
+CMD ["sh"]
