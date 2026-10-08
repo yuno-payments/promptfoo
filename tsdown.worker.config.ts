@@ -7,7 +7,7 @@
 // library esm+cjs) — which the runtime still needs — while making the build fit.
 import { defineConfig } from 'tsdown';
 
-import base from './tsdown.config';
+import base from './tsdown.config.ts';
 
 const configs = Array.isArray(base) ? base : [base];
 
