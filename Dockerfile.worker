@@ -33,7 +33,8 @@ COPY . .
 # build:app (web UI) and tsc (type-check, --noEmit) since the Job never serves
 # the UI. Use the worker config (dts:false) — the dts (tsgo) pass is what OOMs
 # the builder; the JS bundles themselves are cheap.
-RUN NODE_OPTIONS=--max-old-space-size=4096 npx tsdown -c tsdown.worker.config.ts
+RUN NODE_OPTIONS=--max-old-space-size=4096 npx tsdown -c tsdown.worker.config.ts && \
+    npx tsx scripts/postbuild.ts
 
 FROM base AS worker
 WORKDIR /app
