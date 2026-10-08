@@ -34,7 +34,12 @@ COPY . .
 # the UI. Use the worker config (dts:false) — the dts (tsgo) pass is what OOMs
 # the builder; the JS bundles themselves are cheap.
 RUN NODE_OPTIONS=--max-old-space-size=4096 npx tsdown -c tsdown.worker.config.ts && \
-    npx tsx scripts/postbuild.ts
+    cp -r drizzle dist/drizzle
+# ^ promptfoo runs drizzle/libsql migrations at startup and needs dist/drizzle
+# (meta/_journal.json + .sql). We copy it directly instead of scripts/postbuild.ts
+# because postbuild hard-fails when the .d.ts outputs are absent (we build dts:false
+# to fit memory). The python/ruby/golang provider wrappers postbuild also copies are
+# not needed here — the red-team uses http + anthropic/openai/google providers only.
 
 FROM base AS worker
 WORKDIR /app
