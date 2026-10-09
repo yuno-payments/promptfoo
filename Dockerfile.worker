@@ -49,14 +49,15 @@ COPY --from=builder /app/dist ./dist
 RUN ln -sf /app/dist/src/entrypoint.js /usr/local/bin/promptfoo && \
     ln -sf /app/dist/src/entrypoint.js /usr/local/bin/pf && \
     chmod +x /app/dist/src/entrypoint.js
-# Quiet by default (no telemetry / update checks). Remote red-team generation
-# (api.promptfoo.app) is ALLOWED by default — the advanced attack plugins
-# (bola/bfla/sql-injection/mcp/harmful) generate their test cases there, not in
-# the OSS, so disabling it dropped them. The worker sets the per-Job env and can
-# re-disable it for a sensitive target via the disable_remote_generation param.
+# Quiet + local by default. Remote red-team generation (api.promptfoo.app) is
+# DISABLED here because it requires a verified promptfoo account email — without
+# one the /task endpoint rejects everything and fails all plugins. Local
+# generation (our own LLM) covers the simpler plugins. The worker re-enables
+# remote per-Job via enable_remote_generation ONLY with a verified account.
 ENV PROMPTFOO_RUNNING_IN_DOCKER=1 \
     PROMPTFOO_DISABLE_TELEMETRY=1 \
     PROMPTFOO_DISABLE_UPDATE=1 \
+    PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=1 \
     PROMPTFOO_SELF_HOSTED=1
 ENTRYPOINT []
 CMD ["sh"]
