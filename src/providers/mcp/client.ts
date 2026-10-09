@@ -3,6 +3,7 @@ import path from 'path';
 import cliState from '../../cliState';
 import { type McpConfigParsed, McpConfigSchema } from '../../contracts/providerConfig/mcp';
 import { getEnvBool, getEnvInt, getProcessEnv } from '../../envars';
+import { renderVarsInObject } from '../../util/render';
 import logger from '../../logger';
 import { TOKEN_REFRESH_BUFFER_MS, type TokenRefreshLock } from '../../util/oauth';
 import { isMissingPackageImportError } from '../../util/packageImportErrors';
@@ -240,9 +241,17 @@ export class MCPClient {
           authHeaders = getAuthHeaders(renderedServer);
         }
 
-        // Combine auth headers with custom headers
+        // Combine auth headers with custom headers. server.headers may carry
+        // `{{env.VAR}}` placeholders (renderAuthVars only renders server.auth, not
+        // headers) — render them against process env so a header whose value is an
+        // env-injected secret isn't sent as the literal "{{env.VAR}}" string (which
+        // the server rejects, e.g. 403 on an API-key header).
+        const renderedHeaders = renderVarsInObject(
+          (server.headers || {}) as Record<string, string>,
+          getProcessEnv() as Record<string, string>,
+        );
         const headers = {
-          ...(server.headers || {}),
+          ...renderedHeaders,
           ...authHeaders,
         };
 
