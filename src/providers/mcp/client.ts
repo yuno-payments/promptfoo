@@ -280,17 +280,29 @@ export class MCPClient {
           );
           await client.connect(transport, requestOptions);
           logger.debug('Connected using Streamable HTTP transport');
-        } catch (error) {
+        } catch (streamableError) {
           logger.debug(
-            `Failed to connect to MCP server with Streamable HTTP transport ${serverKey}: ${error}`,
+            `Failed to connect to MCP server with Streamable HTTP transport ${serverKey}: ${streamableError}`,
           );
           const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
           transport = new SSEClientTransport(
             new URL(serverUrl),
             hasOptions ? transportOptions : undefined,
           );
-          await client.connect(transport, requestOptions);
-          logger.debug('Connected using SSE transport');
+          try {
+            await client.connect(transport, requestOptions);
+            logger.debug('Connected using SSE transport');
+          } catch (sseError) {
+            // Surface BOTH transport errors. The Streamable HTTP attempt is the one
+            // that matters for a modern /mcp server; the SSE fallback (older GET-based
+            // transport) almost always 400/405s against a Streamable-HTTP-only server,
+            // and reporting only the SSE error hides why the real transport failed.
+            throw new Error(
+              `Failed to connect to MCP server ${serverKey}. ` +
+                `Streamable HTTP transport error: ${streamableError instanceof Error ? streamableError.message : streamableError}. ` +
+                `SSE fallback error: ${sseError instanceof Error ? sseError.message : sseError}`,
+            );
+          }
         }
       } else {
         throw new Error('Either command or path or url must be specified for MCP server');
